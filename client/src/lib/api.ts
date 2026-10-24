@@ -1,3 +1,12 @@
+export type SpendingLevel = 'very_high' | 'high' | 'normal' | 'low';
+
+export const SPENDING_LEVEL_LABELS: Record<SpendingLevel, string> = {
+  very_high: 'Very High',
+  high: 'High',
+  normal: 'Normal',
+  low: 'Low',
+};
+
 export interface MonthContribution {
   name: string;
   multiplier: number;
@@ -5,7 +14,6 @@ export interface MonthContribution {
 
 export interface MonthView {
   month: number;
-  weight: number;
   budget: number;
   overrideAmount: number | null;
   isPinned: boolean;
@@ -13,7 +21,9 @@ export interface MonthView {
   effectiveBudget: number;
   actualSpend: number;
   status: string;
-  contributions: MonthContribution[];
+  festivalNames: string[];
+  spendingLevel: SpendingLevel | null;
+  spendingReason: string | null;
 }
 
 export interface PlanView {
@@ -22,7 +32,6 @@ export interface PlanView {
   envelope: number;
   savingsFloor: number;
   monthlyBase: number;
-  totalWeight: number;
   rationale: string | null;
   months: MonthView[];
 }
@@ -117,6 +126,31 @@ export function getDashboard(year: number, month: number): Promise<DashboardResp
 
 export function getBootstrap(year?: number): Promise<BootstrapResponse> {
   return request<BootstrapResponse>(`/bootstrap${year ? `?year=${year}` : ''}`);
+}
+
+export function putSpendingLevel(
+  year: number,
+  month: number,
+  level: SpendingLevel,
+): Promise<PlanView> {
+  return request<PlanView>('/plan/spending-level', {
+    method: 'PUT',
+    body: JSON.stringify({ year, month, level }),
+  });
+}
+
+export function postResetMonth(year: number, month: number): Promise<PlanView> {
+  return request<PlanView>('/plan/reset-month', {
+    method: 'POST',
+    body: JSON.stringify({ year, month }),
+  });
+}
+
+export function postResetAll(year: number): Promise<PlanView> {
+  return request<PlanView>('/plan/reset-all', {
+    method: 'POST',
+    body: JSON.stringify({ year }),
+  });
 }
 
 export function putOverrides(year: number, overrides: Record<number, number>): Promise<PlanView> {

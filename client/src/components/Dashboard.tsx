@@ -90,12 +90,10 @@ export function Dashboard({ data, month, year }: { data: DashboardData; month: n
             <p className="text-xs uppercase tracking-wide text-ink-soft">Pace</p>
             <StatusBadge status={monthly.status} />
           </div>
-          {currentMonthPlan && (
+          {currentMonthPlan && currentMonthPlan.festivalNames.length > 0 && (
             <p className="mt-3 text-xs text-ink-soft">
-              Budget weight <span className="font-medium text-ink">{currentMonthPlan.weight.toFixed(2)}×</span>
-              {currentMonthPlan.contributions.length > 0 && (
-                <span className="ml-1">· {currentMonthPlan.contributions.map(c => c.name).join(', ')}</span>
-              )}
+              <span className="font-medium text-ink">Festival month</span>
+              <span className="ml-1">· {currentMonthPlan.festivalNames.join(', ')}</span>
             </p>
           )}
           {monthly.willBreach && (

@@ -6,9 +6,19 @@ import {
   listFestivals,
   setFestivalSelections,
 } from './services/festivalService.js';
-import { ensureDemoUser, generatePlan, getPlan, setOverrides } from './services/planService.js';
+import {
+  ensureDemoUser,
+  generatePlan,
+  getPlan,
+  resetAllPlan,
+  resetMonth,
+  setOverrides,
+  setSpendingLevel,
+} from './services/planService.js';
 import { addExpense, listExpenses, getMonthSummary } from './services/expenseService.js';
 import { CATEGORIES } from './services/expenseParser.js';
+import { SPENDING_LEVEL_LABELS } from './services/spendingLevelService.js';
+import type { SpendingLevel } from './services/spendingLevelService.js';
 
 export const router = Router();
 
@@ -134,6 +144,54 @@ router.put('/plan/overrides', async (req, res, next) => {
     const body = overridesSchema.parse(req.body);
     const user = await ensureDemoUser();
     const plan = await setOverrides(user.id, body.year ?? YEAR(), body.overrides);
+    res.json(plan);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Set spending level for one month (Very High / High / Normal / Low).
+// AI translates the label into a weight; engine rebalances; total stays fixed.
+router.put('/plan/spending-level', async (req, res, next) => {
+  try {
+    const body = z
+      .object({
+        year: yearSchema,
+        month: z.number().int().min(1).max(12),
+        level: z.enum(Object.keys(SPENDING_LEVEL_LABELS) as [SpendingLevel, ...SpendingLevel[]]),
+      })
+      .parse(req.body);
+
+    const user = await ensureDemoUser();
+    const plan = await setSpendingLevel(user.id, body.year ?? YEAR(), body.month, body.level);
+    res.json(plan);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/plan/reset-month', async (req, res, next) => {
+  try {
+    const body = z
+      .object({
+        year: yearSchema,
+        month: z.number().int().min(1).max(12),
+      })
+      .parse(req.body);
+
+    const user = await ensureDemoUser();
+    const plan = await resetMonth(user.id, body.year ?? YEAR(), body.month);
+    res.json(plan);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/plan/reset-all', async (req, res, next) => {
+  try {
+    const body = z.object({ year: yearSchema }).parse(req.body);
+    const user = await ensureDemoUser();
+    const plan = await resetAllPlan(user.id, body.year ?? YEAR());
     res.json(plan);
   } catch (err) {
     next(err);
