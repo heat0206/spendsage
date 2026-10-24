@@ -18,8 +18,9 @@ interface GeminiResponse {
 }
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const isTestEnv = process.env.NODE_ENV === 'test' || Boolean(process.env.VITEST);
 const CACHE_DIR = path.resolve(__dirname, '../../.cache');
-const CACHE_FILE = path.join(CACHE_DIR, 'ai-cache.json');
+const CACHE_FILE = path.join(CACHE_DIR, isTestEnv ? 'ai-cache.test.json' : 'ai-cache.json');
 
 const memoryCache = new Map<string, unknown>();
 

@@ -63,8 +63,6 @@ export default function YearPlanner() {
   const [amountInput, setAmountInput] = useState('');
   const amountInputRef = useRef<HTMLInputElement>(null);
 
-  const commitTimer = useRef<number | undefined>(undefined);
-
   useEffect(() => {
     let cancelled = false;
     getBootstrap()
@@ -92,38 +90,12 @@ export default function YearPlanner() {
     }
   }, [selected, plan]);
 
-  const commitOverride = useCallback(
-    (next: Record<number, number>) => {
-      setOverrides(next);
-      if (!plan) return;
-
-      window.clearTimeout(commitTimer.current);
-      commitTimer.current = window.setTimeout(() => {
-        void (async () => {
-          setSaving(true);
-          try {
-            const updated = await putOverrides(plan.year, next);
-            setPlan(updated);
-            setOverrides(pickedOverrides(updated));
-            setError(null);
-          } catch (err) {
-            setError(err instanceof Error ? err.message : 'Could not save');
-          } finally {
-            setSaving(false);
-          }
-        })();
-      }, 300);
-    },
-    [plan],
-  );
-
   const applyAmountInput = useCallback(() => {
     if (!plan) return;
     const rupees = parseFloat(amountInput);
     if (!amountInput.trim() || isNaN(rupees) || rupees < 0) return;
     const paise = Math.round(rupees * 100);
 
-    window.clearTimeout(commitTimer.current);
     const next = { ...overrides, [selected]: paise };
     setOverrides(next);
     setSaving(true);
@@ -136,6 +108,8 @@ export default function YearPlanner() {
         setOverrides(pickedOverrides(updated));
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Could not set amount');
+        // Roll back optimistic override on failure
+        setOverrides(pickedOverrides(plan));
       } finally {
         setSaving(false);
       }

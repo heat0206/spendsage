@@ -163,13 +163,21 @@ export async function getPlan(userId: string, year: number): Promise<PlanView | 
   const table = buildWeightTable(sources);
   const festivalsByMonth = new Map(table.map((m) => [m.month, m.contributions.map((c) => c.name)]));
 
+  let rationale = plan.aiRationale;
+  if (rationale && (rationale.includes('×') || rationale.includes('at 0.'))) {
+    rationale = rationale.replace(/\s+at\s+[\d.]+×/g, '');
+    void prisma.annualPlan
+      .update({ where: { id: plan.id }, data: { aiRationale: rationale } })
+      .catch(() => {});
+  }
+
   return {
     id: plan.id,
     year: plan.year,
     envelope: plan.envelope,
     savingsFloor: plan.savingsFloor,
     monthlyBase: Math.round(plan.envelope / 12),
-    rationale: plan.aiRationale,
+    rationale,
     months: plan.months.map((month) => {
       let spendingLevel: SpendingLevel | null = null;
       let spendingReason: string | null = null;
@@ -204,7 +212,8 @@ export async function getPlan(userId: string, year: number): Promise<PlanView | 
 
 /**
  * Applies a complete override set (not a delta) and repersists.
- * Sending the whole map keeps the client and server from drifting apart.
+ * Preserves custom spending levels on unpinned months and recalculates
+ * remaining budget according to their weights.
  */
 export async function setOverrides(
   userId: string,
@@ -221,7 +230,6 @@ export async function setOverrides(
   const sources = await getWeightSources(userId);
   const table = buildWeightTable(sources);
 
-  const base = allocateAnnual(plan.envelope, table, Math.round(plan.envelope / 12));
   const parsed = new Map<number, number>();
   for (const [month, amount] of Object.entries(overrides)) {
     const index = Number(month);
@@ -234,8 +242,40 @@ export async function setOverrides(
     parsed.set(index, amount);
   }
 
+  // Preserve spending levels for unpinned months; pinned months have custom levels cleared.
+  const existingMeta = new Map<number, { level: SpendingLevel; reason: string }>();
+  for (const mp of plan.months) {
+    if (!parsed.has(mp.month) && mp.multiplierBreakdown) {
+      try {
+        const parsedMeta = JSON.parse(mp.multiplierBreakdown) as {
+          spendingLevel?: SpendingLevel;
+          spendingReason?: string;
+        };
+        if (parsedMeta.spendingLevel && parsedMeta.spendingReason) {
+          existingMeta.set(mp.month, {
+            level: parsedMeta.spendingLevel,
+            reason: parsedMeta.spendingReason,
+          });
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
+  // Incorporate custom weights from unpinned spending-level months into the weight table
+  const combinedTable = table.map((m) => {
+    const meta = existingMeta.get(m.month);
+    if (meta) {
+      const existingRow = plan.months.find((r) => r.month === m.month);
+      return { ...m, weight: existingRow ? existingRow.weight : m.weight };
+    }
+    return m;
+  });
+
+  const base = allocateAnnual(plan.envelope, combinedTable, Math.round(plan.envelope / 12));
   const next = applyOverrides(base, parsed);
-  return persistPlan(userId, year, next, parsed);
+  return persistPlan(userId, year, next, parsed, existingMeta);
 }
 
 /**
@@ -460,13 +500,18 @@ async function persistPlan(
     const pinned = overrides?.has(month.month) ?? false;
     const levelMeta = spendingLevelMeta?.get(month.month);
 
-    // Preserve existing metadata unless this month is being updated.
+    // If pinned, spending level is nullified
     let breakdown: string;
-    if (levelMeta) {
+    if (pinned) {
+      breakdown = JSON.stringify({});
+    } else if (levelMeta) {
       breakdown = JSON.stringify({
         spendingLevel: levelMeta.level,
         spendingReason: levelMeta.reason,
       });
+    } else if (spendingLevelMeta !== undefined) {
+      // spendingLevelMeta map was provided and this month is not in it: clear it
+      breakdown = JSON.stringify({});
     } else {
       breakdown = existingMeta.get(month.month) ?? JSON.stringify({});
     }
@@ -496,9 +541,9 @@ function buildRationale(allocation: AnnualAllocation): string {
   const peak = allocation.months.reduce((max, m) => (m.budget > max.budget ? m : max));
   const lean = allocation.months.reduce((min, m) => (m.budget < min.budget ? m : min));
   const peakNames = peak.contributions.map((c) => c.name).join(', ');
-  return `Your heaviest month is ${monthName(peak.month)} (${peakNames || 'no festivals'}), funded by ${monthName(
+  return `Your heaviest month is ${monthName(peak.month)} (${peakNames || 'no festivals'}), funded by savings in leaner months like ${monthName(
     lean.month,
-  )} at ${lean.weight.toFixed(2)}×. The year still totals the same amount.`;
+  )}. The year still totals the same amount.`;
 }
 
 export function monthName(month: number): string {

@@ -28,7 +28,8 @@ const schema = z.object({
     .optional()
     .transform((val) => {
       if (isTest && process.env.FORCE_LIVE_AI !== 'true') return true;
-      return val === 'true' || val === '1';
+      const normalized = val?.trim().toLowerCase();
+      return normalized === 'true' || normalized === '1';
     })
     .default(isTest ? 'true' : 'false'),
 });
