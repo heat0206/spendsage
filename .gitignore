@@ -39,6 +39,7 @@ coverage/
 # Caches
 .vite/
 .cache/
+*.ai-cache.json
 .eslintcache
 *.tsbuildinfo
 

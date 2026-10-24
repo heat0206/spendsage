@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ZodError } from 'zod';
 import { env, hasGemini, hasPayPal } from './env.js';
+import { getAICacheStats } from './services/aiService.js';
 import { router } from './routes.js';
 import { ensureFestivalCatalogue, ensureFestivalSelections } from './services/festivalService.js';
 import { ensureDemoUser } from './services/planService.js';
@@ -22,7 +23,9 @@ app.get('/api/health', (_req, res) => {
     time: new Date().toISOString(),
     integrations: {
       paypal: hasPayPal,
-      gemini: hasGemini,
+      gemini: env.MOCK_AI ? 'mock' : hasGemini,
+      mockAi: env.MOCK_AI,
+      aiCache: getAICacheStats(),
     },
   });
 });
@@ -76,5 +79,11 @@ app.listen(env.PORT, async () => {
     console.error('  ! bootstrap failed', err);
   }
   if (!hasPayPal) console.warn('  ! PayPal credentials missing — set them in server/.env');
-  if (!hasGemini) console.warn('  ! GEMINI_API_KEY missing — AI features will use fallbacks');
+  if (env.MOCK_AI) {
+    console.log('  · MOCK_AI=true — AI runs in local deterministic mock mode (0 Gemini quota used)');
+  } else if (!hasGemini) {
+    console.warn('  ! GEMINI_API_KEY missing — AI features will use fallbacks');
+  } else {
+    console.log('  · Gemini AI active with local disk/memory caching');
+  }
 });

@@ -1,8 +1,17 @@
-import 'dotenv/config';
+import dotenv from 'dotenv';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+// Always load server/.env regardless of current working directory
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
+dotenv.config();
+
+const isTest = process.env.NODE_ENV === 'test' || Boolean(process.env.VITEST);
+
 const schema = z.object({
-  NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
+  NODE_ENV: z.enum(['development', 'production', 'test']).default(isTest ? 'test' : 'development'),
   PORT: z.coerce.number().int().positive().default(4000),
   DATABASE_URL: z.string().default('file:./dev.db'),
   JWT_SECRET: z.string().min(1).default('dev-only-insecure-secret'),
@@ -14,6 +23,14 @@ const schema = z.object({
 
   GEMINI_API_KEY: z.string().optional(),
   GEMINI_MODEL: z.string().default('gemini-2.5-flash'),
+  MOCK_AI: z
+    .string()
+    .optional()
+    .transform((val) => {
+      if (isTest && process.env.FORCE_LIVE_AI !== 'true') return true;
+      return val === 'true' || val === '1';
+    })
+    .default(isTest ? 'true' : 'false'),
 });
 
 export const env = schema.parse(process.env);
