@@ -101,20 +101,27 @@ export default function App() {
             <span className="text-xs text-ink-soft">illustrative · 2026–27</span>
           </div>
 
-          <div className="mt-6 flex h-36 items-end gap-1.5 sm:gap-2.5">
+          <div className="mt-6 flex gap-1.5 sm:gap-2.5">
             {PREVIEW_WEIGHTS.map((weight, index) => {
               const heightPct = ((weight - 1) / 0.45) * 45 + 55;
               const isPeak = weight === Math.max(...PREVIEW_WEIGHTS);
               return (
-                <div key={index} className="flex flex-1 flex-col items-center gap-2">
-                  <div
-                    className={`w-full rounded-t-md transition-all ${
-                      isPeak ? 'bg-marigold' : 'bg-sage/85'
-                    }`}
-                    style={{ height: `${heightPct}%` }}
-                    title={`Weight ${weight.toFixed(2)}`}
-                  />
-                  <span className="text-[10px] font-medium text-ink-soft">{MONTH_LABELS[index]}</span>
+                <div key={index} className="flex flex-1 flex-col items-center">
+                  {/* The bar needs a parent with a DEFINITE height for a percentage
+                      height to resolve. Against an auto-height flex child it collapses
+                      to zero. `h-32` + `items-end` gives us that. */}
+                  <div className="flex h-32 w-full items-end">
+                    <div
+                      className={`w-full rounded-t-md transition-all ${
+                        isPeak ? 'bg-marigold' : 'bg-sage/85'
+                      }`}
+                      style={{ height: `${heightPct}%` }}
+                      title={`Weight ${weight.toFixed(2)}`}
+                    />
+                  </div>
+                  <span className="mt-2 text-[10px] font-medium text-ink-soft">
+                    {MONTH_LABELS[index]}
+                  </span>
                 </div>
               );
             })}
