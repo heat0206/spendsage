@@ -7,6 +7,8 @@ import {
   setFestivalSelections,
 } from './services/festivalService.js';
 import { ensureDemoUser, generatePlan, getPlan, setOverrides } from './services/planService.js';
+import { addExpense, listExpenses, getMonthSummary } from './services/expenseService.js';
+import { CATEGORIES } from './services/expenseParser.js';
 
 export const router = Router();
 
@@ -45,6 +47,22 @@ const eventSchema = z.object({
   multiplier: z.number().min(0).max(3),
   categoryAffinity: z.array(z.string().max(40)).max(8).optional(),
 });
+
+const addExpenseSchema = z.union([
+  z.object({
+    rawText: z.string().min(1).max(2000),
+    source: z.enum(['MANUAL', 'SHARE', 'DEMO']).optional(),
+  }),
+  z.object({
+    amount: z.number().int().positive(),
+    merchantRaw: z.string().max(200).optional(),
+    merchantClean: z.string().max(100).optional(),
+    category: z.enum(CATEGORIES).optional(),
+    occurredAt: z.string().optional(),
+    note: z.string().max(300).optional(),
+    source: z.enum(['MANUAL', 'SHARE', 'DEMO']).optional(),
+  }),
+]);
 
 // ---------------------------------------------------------------------------
 // Bootstrap: everything the planner needs in one round trip.
@@ -188,3 +206,73 @@ async function regenerate(userId: string, year: number) {
     savingsFloor: profile.savingsFloor,
   });
 }
+
+// ---------------------------------------------------------------------------
+// Expenses
+// ---------------------------------------------------------------------------
+router.post('/expenses', async (req, res, next) => {
+  try {
+    const body = addExpenseSchema.parse(req.body);
+    const user = await ensureDemoUser();
+    const result = await addExpense(user.id, body);
+    res.status(201).json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/expenses/parse', async (req, res, next) => {
+  try {
+    const { rawText } = z.object({ rawText: z.string().min(1).max(2000) }).parse(req.body);
+    const user = await ensureDemoUser();
+    const result = await addExpense(user.id, { rawText, source: 'SHARE' });
+    res.status(201).json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/expenses', async (req, res, next) => {
+  try {
+    const user = await ensureDemoUser();
+    const year = req.query.year ? Number(req.query.year) : undefined;
+    const month = req.query.month ? Number(req.query.month) : undefined;
+    const limit = req.query.limit ? Math.min(Number(req.query.limit), 200) : 50;
+    const expenses = await listExpenses(user.id, { year, month, limit });
+    res.json({ expenses });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Dashboard
+// ---------------------------------------------------------------------------
+router.get('/dashboard', async (req, res, next) => {
+  try {
+    const user = await ensureDemoUser();
+    const now = new Date();
+    const year = Number(req.query.year) || now.getFullYear();
+    const month = Number(req.query.month) || now.getMonth() + 1;
+
+    const [plan, summary, recent] = await Promise.all([
+      getPlan(user.id, year),
+      getMonthSummary(user.id, year, month),
+      listExpenses(user.id, { year, month, limit: 10 }),
+    ]);
+
+    // Category breakdown for the current month
+    const expenses = await listExpenses(user.id, { year, month, limit: 500 });
+    const byCategory: Record<string, number> = {};
+    for (const expense of expenses) {
+      byCategory[expense.category] = (byCategory[expense.category] ?? 0) + expense.amount;
+    }
+    const categories = Object.entries(byCategory)
+      .map(([name, total]) => ({ name, total }))
+      .sort((a, b) => b.total - a.total);
+
+    res.json({ plan, monthly: summary, recent, categories });
+  } catch (err) {
+    next(err);
+  }
+});

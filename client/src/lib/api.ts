@@ -53,6 +53,44 @@ export interface BootstrapResponse {
   plan: PlanView | null;
 }
 
+export interface MonthSummary {
+  month: number;
+  year: number;
+  effectiveBudget: number;
+  actualSpend: number;
+  remaining: number;
+  daysLeft: number;
+  safeDailySpend: number;
+  status: string;
+  willBreach: boolean;
+  toastLine: string;
+}
+
+export interface ExpenseView {
+  id: string;
+  amount: number;
+  merchantRaw: string;
+  merchantClean: string;
+  category: string;
+  source: string;
+  occurredAt: string;
+  note: string;
+  aiConfidence: number | null;
+  createdAt: string;
+}
+
+export interface AddExpenseResult {
+  expense: ExpenseView;
+  monthly: MonthSummary;
+}
+
+export interface DashboardResponse {
+  plan: PlanView | null;
+  monthly: MonthSummary;
+  recent: ExpenseView[];
+  categories: { name: string; total: number }[];
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`/api${path}`, {
     ...init,
@@ -71,6 +109,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   return (await res.json()) as T;
+}
+
+export function getDashboard(year: number, month: number): Promise<DashboardResponse> {
+  return request<DashboardResponse>(`/dashboard?year=${year}&month=${month}`);
 }
 
 export function getBootstrap(year?: number): Promise<BootstrapResponse> {
