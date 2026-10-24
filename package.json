@@ -1,0 +1,22 @@
+{
+  "name": "spendsage",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Festival-aware AI money planner — PayPal AI Hackathon",
+  "license": "MIT",
+  "scripts": {
+    "install:all": "npm install && npm --prefix server install && npm --prefix client install",
+    "dev": "concurrently -n server,client -c green,cyan \"npm --prefix server run dev\" \"npm --prefix client run dev\"",
+    "dev:server": "npm --prefix server run dev",
+    "dev:client": "npm --prefix client run dev",
+    "build": "npm --prefix client run build && npm --prefix server run build",
+    "test": "npm --prefix server run test",
+    "typecheck": "npm --prefix server run typecheck && npm --prefix client run typecheck",
+    "db:migrate": "npm --prefix server run prisma:migrate",
+    "db:generate": "npm --prefix server run prisma:generate",
+    "db:studio": "npm --prefix server run prisma:studio"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}

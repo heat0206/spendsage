@@ -1,0 +1,185 @@
+// SpendSage data model.
+//
+// CONVENTIONS
+//  * SQLite has no native enums or JSON columns — enum-like fields are `String`
+//    and structured fields are `String` holding JSON. Validate at the API edge.
+//  * ALL money fields are integers in PAISE (1 INR = 100 paise).
+//    Never store money as a float; see services/budgetEngine.ts.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  passwordHash  String
+  name          String?
+  paypalPayerId String?  @unique
+  currency      String   @default("INR")
+  createdAt     DateTime @default(now())
+
+  profile            Profile?
+  commitments        Commitment[]
+  festivalSelections FestivalSelection[]
+  customEvents       CustomEvent[]
+  annualPlans        AnnualPlan[]
+  expenses           Expense[]
+  vaultDeposits      VaultDeposit[]
+  insights           Insight[]
+}
+
+model Profile {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  monthlyTakeHome Int
+  payday          Int      @default(1)
+  savingsFloor    Int
+  cityTier        String   @default("tier1")
+  householdSize   Int      @default(1)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model Commitment {
+  id       String @id @default(cuid())
+  userId   String
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  label    String
+  amount   Int
+  category String @default("Bills")
+
+  @@index([userId])
+}
+
+// Catalogue of festivals. Month-level only: a monthly budget planner does not
+// need day precision, and month assignment is planning-year specific
+// (e.g. Diwali falls in Nov 2026 but Oct 2027).
+model Festival {
+  id                String @id @default(cuid())
+  name              String
+  month             Int
+  region            String @default("pan-india")
+  defaultMultiplier Float
+  categoryAffinity  String @default("[]")
+  note              String?
+
+  selections FestivalSelection[]
+
+  @@unique([name, month])
+}
+
+model FestivalSelection {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  festivalId String
+  festival   Festival @relation(fields: [festivalId], references: [id], onDelete: Cascade)
+  enabled    Boolean  @default(true)
+
+  @@unique([userId, festivalId])
+  @@index([userId])
+}
+
+model CustomEvent {
+  id               String @id @default(cuid())
+  userId           String
+  user             User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name             String
+  month            Int
+  multiplier       Float
+  categoryAffinity String @default("[]")
+
+  @@index([userId])
+}
+
+model AnnualPlan {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  year         Int
+  envelope     Int
+  savingsFloor Int
+  aiRationale  String?
+  generatedAt  DateTime @default(now())
+
+  months MonthPlan[]
+
+  @@unique([userId, year])
+  @@index([userId])
+}
+
+model MonthPlan {
+  id                  String    @id @default(cuid())
+  annualPlanId        String
+  annualPlan          AnnualPlan @relation(fields: [annualPlanId], references: [id], onDelete: Cascade)
+  month               Int
+  weight              Float
+  multiplierBreakdown String    @default("[]")
+  plannedBudget       Int
+  overrideAmount      Int?
+  isPinned            Boolean   @default(false)
+  carryIn             Int       @default(0)
+  effectiveBudget     Int
+  actualSpend         Int       @default(0)
+  closedAt            DateTime?
+  status              String    @default("PLANNED")
+
+  expenses Expense[]
+
+  @@unique([annualPlanId, month])
+  @@index([annualPlanId])
+}
+
+model Expense {
+  id            String     @id @default(cuid())
+  userId        String
+  user          User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  monthPlanId   String?
+  monthPlan     MonthPlan? @relation(fields: [monthPlanId], references: [id], onDelete: SetNull)
+  amount        Int
+  merchantRaw   String
+  merchantClean String?
+  category      String
+  source        String     @default("MANUAL")
+  occurredAt    DateTime
+  note          String?
+  aiConfidence  Float?
+  createdAt     DateTime   @default(now())
+
+  @@index([userId, occurredAt])
+}
+
+model VaultDeposit {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount        Int
+  currency      String    @default("USD")
+  paypalOrderId String?   @unique
+  status        String    @default("CREATED")
+  reason        String    @default("MANUAL_TOPUP")
+  monthPlanId   String?
+  createdAt     DateTime  @default(now())
+
+  @@index([userId])
+}
+
+model Insight {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  year      Int
+  month     Int
+  type      String
+  text      String
+  createdAt DateTime @default(now())
+
+  @@index([userId, year, month])
+}
